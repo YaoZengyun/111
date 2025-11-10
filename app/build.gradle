@@ -13,12 +13,35 @@ android {
         targetSdk 34
         versionCode 1
         versionName "1.0"
+        
+        // 添加对所有ABI的支持
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
+        }
+    }
+
+    signingConfigs {
+        release {
+            // 使用调试签名（用于GitHub Actions自动构建）
+            storeFile file("debug.keystore")
+            storePassword "android"
+            keyAlias "androiddebugkey"
+            keyPassword "android"
+        }
     }
 
     buildTypes {
+        debug {
+            minifyEnabled false
+            debuggable true
+        }
+        
         release {
             minifyEnabled false
+            shrinkResources false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+            debuggable false
         }
     }
     

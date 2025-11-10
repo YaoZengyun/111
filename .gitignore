@@ -55,7 +55,8 @@ captures/
 
 # Keystore files
 *.jks
-*.keystore
+# *.keystore  # 注释掉，允许debug.keystore用于CI/CD
+!app/debug.keystore
 
 # External native build folder generated in Android Studio 2.2 and later
 .externalNativeBuild
