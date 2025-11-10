@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">QQ消息图片助手</string>
+    <string name="accessibility_service_description">监听QQ消息发送，自动将文字内容贴在图片上并发送</string>
+    <string name="service_status">服务状态</string>
+    <string name="service_enabled">已启用</string>
+    <string name="service_disabled">已禁用</string>
+    <string name="enable_service">启用服务</string>
+    <string name="disable_service">禁用服务</string>
+    <string name="select_template_image">选择模板图片</string>
+    <string name="current_template">当前模板</string>
+    <string name="no_template_selected">未选择模板</string>
+    <string name="text_position">文字位置设置</string>
+    <string name="text_x">X坐标</string>
+    <string name="text_y">Y坐标</string>
+    <string name="text_size">文字大小</string>
+    <string name="text_color">文字颜色</string>
+    <string name="save_settings">保存设置</string>
+    <string name="settings_saved">设置已保存</string>
+    <string name="open_accessibility_settings">打开无障碍设置</string>
+    <string name="accessibility_hint">请在无障碍设置中启用本应用</string>
+    <string name="max_width">最大宽度</string>
+</resources>
