@@ -132,27 +132,57 @@ class QQAccessibilityService : AccessibilityService() {
             }
             
             AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> {
-                // 监听输入框文本变化，检测消息发送
+                // 监听输入框文本变化
                 val node = event.source
                 if (node != null && node.className?.contains("EditText") == true) {
                     val currentText = node.text?.toString() ?: ""
                     
-                    if (currentText.isNotEmpty()) {
-                        // 有内容，记录下来
+                    // 检查是否以 "\\" 结尾（用户主动触发标记）
+                    if (currentText.endsWith("\\\\")) {
+                        Log.i(TAG, "检测到触发标记 '\\\\'，原文本: '$currentText'")
+                        
+                        // 提取 "\\" 之前的文本
+                        val messageText = currentText.substring(0, currentText.length - 2).trim()
+                        
+                        if (messageText.isNotEmpty()) {
+                            Log.i(TAG, "提取消息内容: '$messageText'")
+                            
+                            // 立即清空输入框
+                            val bundle = android.os.Bundle()
+                            bundle.putCharSequence(
+                                AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, 
+                                ""
+                            )
+                            node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, bundle)
+                            
+                            // 延迟处理，确保输入框已清空
+                            Handler(Looper.getMainLooper()).postDelayed({
+                                processAndSendMessage(messageText)
+                            }, 300)
+                        } else {
+                            Log.i(TAG, "提取的消息为空，忽略")
+                        }
+                    } else if (currentText.isNotEmpty()) {
+                        // 正常记录输入文本（用于其他功能）
                         lastInputText = currentText
                         Log.i(TAG, "记录输入文本: '$currentText'")
                     } else if (lastInputText.isNotEmpty()) {
-                        // 输入框从有内容变为空，说明消息被发送了
-                        Log.i(TAG, "检测到消息发送！之前的内容: '$lastInputText'")
+                        // 输入框从有内容变为空（备用检测：消息被发送）
+                        Log.i(TAG, "检测到消息发送（备用）！之前的内容: '$lastInputText'")
                         
-                        // 保存要处理的文本
-                        val messageToProcess = lastInputText
-                        lastInputText = ""
-                        
-                        // 延迟处理，确保消息已经发送
-                        Handler(Looper.getMainLooper()).postDelayed({
-                            processAndSendMessage(messageToProcess)
-                        }, 300)
+                        // 这个作为备用方案，如果用户忘记加 "\\" 直接发送
+                        // 可以通过设置开关来启用/禁用
+                        val prefs = getSharedPreferences("settings", Context.MODE_PRIVATE)
+                        if (prefs.getBoolean("auto_detect_send", false)) {
+                            val messageToProcess = lastInputText
+                            lastInputText = ""
+                            
+                            Handler(Looper.getMainLooper()).postDelayed({
+                                processAndSendMessage(messageToProcess)
+                            }, 300)
+                        } else {
+                            lastInputText = ""
+                        }
                     }
                     node.recycle()
                 }
