@@ -20,8 +20,9 @@ import java.io.FileOutputStream
 
 class QQAccessibilityService : AccessibilityService() {
 
-    private var lastProcessedText: String? = null
+    private var lastProcessedText: String = ""
     private var lastProcessedTime: Long = 0
+    private var lastInputText: String = ""  // 记录最后输入的文本
     
     companion object {
         private const val TAG = "QQAccessibilityService"
@@ -46,19 +47,27 @@ class QQAccessibilityService : AccessibilityService() {
             return
         }
 
-        // 只监听点击事件来触发处理
+        // 监听文本变化事件
         when (event.eventType) {
-            AccessibilityEvent.TYPE_VIEW_CLICKED -> {
-                // 检查是否点击了发送按钮
-                val clickedNode = event.source
-                if (clickedNode != null) {
-                    val isButton = clickedNode.className?.toString()?.contains("Button") == true ||
-                                   clickedNode.className?.toString()?.contains("ImageView") == true
-                    if (isButton) {
-                        Log.d(TAG, "检测到按钮点击，开始处理")
-                        processQQMessage()
+            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> {
+                // 检查是否是输入框
+                val node = event.source
+                if (node != null && node.className?.contains("EditText") == true) {
+                    val currentText = node.text?.toString() ?: ""
+                    Log.d(TAG, "文本变化: '$currentText'")
+                    
+                    // 如果有之前记录的文本，且现在文本为空或变短了很多，说明可能发送了
+                    if (lastInputText.isNotEmpty() && currentText.isEmpty()) {
+                        Log.d(TAG, "检测到文本清空（可能已发送），处理消息: $lastInputText")
+                        // 使用上一次记录的文本进行处理
+                        processMessageDirectly(lastInputText)
+                        lastInputText = ""
+                    } else if (currentText.isNotEmpty()) {
+                        // 记录当前输入的文本
+                        lastInputText = currentText
                     }
-                    clickedNode.recycle()
+                    
+                    node.recycle()
                 }
             }
         }
@@ -96,6 +105,30 @@ class QQAccessibilityService : AccessibilityService() {
             rootNode.recycle()
         } catch (e: Exception) {
             Log.e(TAG, "处理消息时出错", e)
+            e.printStackTrace()
+        }
+    }
+    
+    private fun processMessageDirectly(messageText: String) {
+        try {
+            Log.d(TAG, "直接处理消息: $messageText")
+            
+            // 防止极短时间内重复处理
+            val currentTime = System.currentTimeMillis()
+            if (messageText == lastProcessedText && 
+                currentTime - lastProcessedTime < 1000) {
+                Log.d(TAG, "重复消息（1秒内），忽略")
+                return
+            }
+
+            Log.d(TAG, "开始处理消息: $messageText")
+            lastProcessedText = messageText
+            lastProcessedTime = currentTime
+            
+            // 处理消息
+            processAndSendMessage(messageText)
+        } catch (e: Exception) {
+            Log.e(TAG, "直接处理消息时出错", e)
             e.printStackTrace()
         }
     }
