@@ -33,6 +33,8 @@ class QQAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
         
+        // 添加Toast调试 - 确认服务正在接收事件
+        showToast("收到事件: ${event.eventType}")
         Log.i(TAG, "收到事件: ${event.eventType}, 包名: ${event.packageName}, 类名: ${event.className}")
 
         // 检查是否启用
