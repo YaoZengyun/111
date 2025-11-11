@@ -46,13 +46,20 @@ class QQAccessibilityService : AccessibilityService() {
             return
         }
 
-        // 监听窗口内容变化和点击事件
+        // 只监听点击事件来触发处理
         when (event.eventType) {
-            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
-            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED,
             AccessibilityEvent.TYPE_VIEW_CLICKED -> {
-                Log.d(TAG, "触发处理逻辑")
-                processQQMessage()
+                // 检查是否点击了发送按钮
+                val clickedNode = event.source
+                if (clickedNode != null) {
+                    val isButton = clickedNode.className?.toString()?.contains("Button") == true ||
+                                   clickedNode.className?.toString()?.contains("ImageView") == true
+                    if (isButton) {
+                        Log.d(TAG, "检测到按钮点击，开始处理")
+                        processQQMessage()
+                    }
+                    clickedNode.recycle()
+                }
             }
         }
     }
@@ -70,25 +77,20 @@ class QQAccessibilityService : AccessibilityService() {
             Log.d(TAG, "找到的消息文本: $messageText")
             
             if (!messageText.isNullOrEmpty()) {
-                // 防止重复处理同一消息
+                // 防止极短时间内重复处理(500ms内的重复点击)
                 val currentTime = System.currentTimeMillis()
                 if (messageText == lastProcessedText && 
-                    currentTime - lastProcessedTime < 3000) {
-                    Log.d(TAG, "重复消息，忽略")
+                    currentTime - lastProcessedTime < 500) {
+                    Log.d(TAG, "重复消息（500ms内），忽略")
                     return
                 }
 
-                // 查找发送按钮点击事件
-                if (findSendButton(rootNode)) {
-                    Log.d(TAG, "找到发送按钮，准备处理消息: $messageText")
-                    lastProcessedText = messageText
-                    lastProcessedTime = currentTime
-                    
-                    // 处理消息
-                    processAndSendMessage(messageText)
-                } else {
-                    Log.d(TAG, "未找到发送按钮")
-                }
+                Log.d(TAG, "准备处理消息: $messageText")
+                lastProcessedText = messageText
+                lastProcessedTime = currentTime
+                
+                // 处理消息
+                processAndSendMessage(messageText)
             }
             
             rootNode.recycle()
