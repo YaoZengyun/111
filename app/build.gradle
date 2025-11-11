@@ -41,7 +41,7 @@ android {
             shrinkResources false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.release
-            debuggable false
+            debuggable true  // 临时改为true以便查看日志
         }
     }
     
