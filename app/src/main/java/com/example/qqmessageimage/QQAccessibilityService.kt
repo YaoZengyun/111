@@ -1,6 +1,7 @@
 ﻿package com.example.qqmessageimage
 
 import android.accessibilityservice.AccessibilityService
+import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -25,6 +26,8 @@ class QQAccessibilityService : AccessibilityService() {
     private var lastProcessedText: String = ""
     private var lastProcessedTime: Long = 0
     private var lastInputText: String = ""  // 记录最后输入的文本
+    private var clipboardManager: ClipboardManager? = null
+    private var isMonitoringClipboard = false
     
     companion object {
         private const val TAG = "QQAccessibilityService"
@@ -33,6 +36,9 @@ class QQAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         Log.i(TAG, "=== 辅助功能服务已连接 ===")
+        
+        // 初始化剪贴板监听
+        setupClipboardMonitor()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -126,13 +132,27 @@ class QQAccessibilityService : AccessibilityService() {
             }
             
             AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> {
-                // 继续记录输入文本，用于备份
+                // 监听输入框文本变化，检测消息发送
                 val node = event.source
                 if (node != null && node.className?.contains("EditText") == true) {
                     val currentText = node.text?.toString() ?: ""
+                    
                     if (currentText.isNotEmpty()) {
+                        // 有内容，记录下来
                         lastInputText = currentText
                         Log.i(TAG, "记录输入文本: '$currentText'")
+                    } else if (lastInputText.isNotEmpty()) {
+                        // 输入框从有内容变为空，说明消息被发送了
+                        Log.i(TAG, "检测到消息发送！之前的内容: '$lastInputText'")
+                        
+                        // 保存要处理的文本
+                        val messageToProcess = lastInputText
+                        lastInputText = ""
+                        
+                        // 延迟处理，确保消息已经发送
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            processAndSendMessage(messageToProcess)
+                        }, 300)
                     }
                     node.recycle()
                 }
@@ -586,6 +606,86 @@ class QQAccessibilityService : AccessibilityService() {
         android.os.Handler(mainLooper).post {
             Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
         }
+    }
+
+    /**
+     * 设置剪贴板监听器
+     */
+    private fun setupClipboardMonitor() {
+        try {
+            clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+            
+            clipboardManager?.addPrimaryClipChangedListener {
+                onClipboardChanged()
+            }
+            
+            isMonitoringClipboard = true
+            Log.i(TAG, "剪贴板监听已启动")
+        } catch (e: Exception) {
+            Log.e(TAG, "设置剪贴板监听失败", e)
+        }
+    }
+
+    /**
+     * 剪贴板内容变化回调
+     */
+    private fun onClipboardChanged() {
+        try {
+            // 检查是否启用
+            val prefs = getSharedPreferences("settings", Context.MODE_PRIVATE)
+            if (!prefs.getBoolean("enabled", false)) {
+                return
+            }
+
+            // 检查是否在QQ聊天界面
+            val rootNode = rootInActiveWindow
+            if (rootNode == null || !isInQQChat(rootNode)) {
+                rootNode?.recycle()
+                return
+            }
+            rootNode.recycle()
+
+            // 获取剪贴板内容
+            val clip = clipboardManager?.primaryClip
+            if (clip != null && clip.itemCount > 0) {
+                val text = clip.getItemAt(0).text?.toString() ?: ""
+                
+                if (text.isNotEmpty() && text != lastProcessedText) {
+                    Log.i(TAG, "检测到剪贴板内容: $text")
+                    
+                    // 防止重复处理（1秒内相同内容）
+                    val currentTime = System.currentTimeMillis()
+                    if (text == lastProcessedText && currentTime - lastProcessedTime < 1000) {
+                        return
+                    }
+                    
+                    lastProcessedText = text
+                    lastProcessedTime = currentTime
+                    
+                    // 延迟处理，给用户一点时间
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        processAndSendMessage(text)
+                    }, 500)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "处理剪贴板变化失败", e)
+        }
+    }
+
+    /**
+     * 检查是否在QQ聊天界面
+     */
+    private fun isInQQChat(rootNode: AccessibilityNodeInfo): Boolean {
+        // 简单检查：查找EditText（输入框）
+        return findEditText(rootNode) != null
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        isMonitoringClipboard = false
+        clipboardManager = null
+        Log.i(TAG, "服务已销毁")
     }
 
     /**
