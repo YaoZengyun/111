@@ -15,6 +15,8 @@ import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Toast
+import android.os.Handler
+import android.os.Looper
 import java.io.File
 import java.io.FileOutputStream
 
@@ -47,27 +49,43 @@ class QQAccessibilityService : AccessibilityService() {
             return
         }
 
-        // 监听文本变化事件
+        // 监听文本变化和窗口变化
         when (event.eventType) {
             AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> {
-                // 检查是否是输入框
+                // 记录输入框的文本
                 val node = event.source
                 if (node != null && node.className?.contains("EditText") == true) {
                     val currentText = node.text?.toString() ?: ""
-                    Log.d(TAG, "文本变化: '$currentText'")
-                    
-                    // 如果有之前记录的文本，且现在文本为空或变短了很多，说明可能发送了
-                    if (lastInputText.isNotEmpty() && currentText.isEmpty()) {
-                        Log.d(TAG, "检测到文本清空（可能已发送），处理消息: $lastInputText")
-                        // 使用上一次记录的文本进行处理
-                        processMessageDirectly(lastInputText)
-                        lastInputText = ""
-                    } else if (currentText.isNotEmpty()) {
-                        // 记录当前输入的文本
+                    if (currentText.isNotEmpty()) {
                         lastInputText = currentText
+                        Log.d(TAG, "记录输入文本: '$currentText'")
                     }
-                    
                     node.recycle()
+                }
+            }
+            
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
+                // 检查是否输入框被清空了（可能是发送了）
+                if (lastInputText.isNotEmpty()) {
+                    // 查找输入框
+                    val rootNode = rootInActiveWindow
+                    val editText = findEditText(rootNode)
+                    if (editText != null) {
+                        val currentText = editText.text?.toString() ?: ""
+                        if (currentText.isEmpty()) {
+                            // 输入框被清空了，说明刚发送了消息
+                            Log.d(TAG, "检测到发送消息: $lastInputText")
+                            val messageToProcess = lastInputText
+                            lastInputText = ""
+                            
+                            // 处理并发送图片
+                            Handler(Looper.getMainLooper()).postDelayed({
+                                processAndSendMessage(messageToProcess)
+                            }, 100)
+                        }
+                        editText.recycle()
+                    }
+                    rootNode?.recycle()
                 }
             }
         }
@@ -131,6 +149,27 @@ class QQAccessibilityService : AccessibilityService() {
             Log.e(TAG, "直接处理消息时出错", e)
             e.printStackTrace()
         }
+    }
+
+    private fun findEditText(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+        node ?: return null
+
+        // 查找输入框
+        if (node.className?.contains("EditText") == true) {
+            return node
+        }
+
+        // 递归查找子节点
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val result = findEditText(child)
+            if (result != null) {
+                return result
+            }
+            child.recycle()
+        }
+
+        return null
     }
 
     private fun findMessageText(node: AccessibilityNodeInfo?): String? {
