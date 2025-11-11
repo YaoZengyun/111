@@ -30,23 +30,35 @@ class QQAccessibilityService : AccessibilityService() {
         private const val TAG = "QQAccessibilityService"
     }
 
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        Log.i(TAG, "=== 辅助功能服务已连接 ===")
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
         
-        // 只记录QQ的事件，减少日志量
-        if (event.packageName == "com.tencent.mobileqq") {
-            Log.i(TAG, "QQ事件: ${event.eventType}, 类名: ${event.className}")
+        // 记录所有事件以便调试
+        Log.i(TAG, "事件: type=${event.eventType}, 包名=${event.packageName}, 类名=${event.className}")
+        
+        // 只处理QQ的事件
+        if (event.packageName != "com.tencent.mobileqq") {
+            return
         }
+        
+        Log.i(TAG, ">>> QQ事件: ${event.eventType}, 类名: ${event.className}")
 
         // 检查是否启用
         val prefs = getSharedPreferences("settings", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("enabled", false)) {
+            Log.i(TAG, "服务未启用")
             return
         }
 
         // 检查模板图片是否存在
         val templateFile = File(filesDir, "template.png")
         if (!templateFile.exists()) {
+            Log.i(TAG, "模板图片不存在")
             return
         }
 
