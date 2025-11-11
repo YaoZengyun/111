@@ -61,8 +61,8 @@ jobs:
     - name: Upload Release APK
       uses: actions/upload-artifact@v4
       with:
-        name: app-release-unsigned
-        path: app/build/outputs/apk/release/app-release-unsigned.apk
+        name: app-release
+        path: app/build/outputs/apk/release/*.apk
 
     - name: Create Release
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -80,7 +80,7 @@ jobs:
           - ✅ 自定义模板图片
           
           ### 安装说明
-          1. 下载 `app-debug.apk`
+          1. 下载 `app-debug.apk` 或 `app-release.apk`
           2. 在Android设备上安装
           3. 按照应用内引导授予权限
           
@@ -93,7 +93,7 @@ jobs:
           提交信息: ${{ github.event.head_commit.message }}
         files: |
           app/build/outputs/apk/debug/app-debug.apk
-          app/build/outputs/apk/release/app-release-unsigned.apk
+          app/build/outputs/apk/release/*.apk
         draft: false
         prerelease: false
       env:
