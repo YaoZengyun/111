@@ -1,4 +1,4 @@
-package com.example.qqmessageimage
+﻿package com.example.qqmessageimage
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
@@ -33,19 +33,19 @@ class QQAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
         
-        Log.d(TAG, "收到事件: ${event.eventType}, 包名: ${event.packageName}, 类名: ${event.className}")
+        Log.i(TAG, "收到事件: ${event.eventType}, 包名: ${event.packageName}, 类名: ${event.className}")
 
         // 检查是否启用
         val prefs = getSharedPreferences("settings", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("enabled", false)) {
-            Log.d(TAG, "服务未启用，忽略事件")
+            Log.i(TAG, "服务未启用，忽略事件")
             return
         }
 
         // 检查模板图片是否存在
         val templateFile = File(filesDir, "template.png")
         if (!templateFile.exists()) {
-            Log.d(TAG, "模板图片不存在")
+            Log.i(TAG, "模板图片不存在")
             return
         }
 
@@ -53,7 +53,7 @@ class QQAccessibilityService : AccessibilityService() {
         when (event.eventType) {
             AccessibilityEvent.TYPE_VIEW_CLICKED -> {
                 // 检测到点击事件，查看是否点击了发送按钮
-                Log.d(TAG, "检测到点击: 类名=${event.className}, 内容描述=${event.contentDescription}")
+                Log.i(TAG, "检测到点击: 类名=${event.className}, 内容描述=${event.contentDescription}")
                 
                 val clickedNode = event.source
                 if (clickedNode != null) {
@@ -62,7 +62,7 @@ class QQAccessibilityService : AccessibilityService() {
                     val contentDesc = clickedNode.contentDescription?.toString() ?: ""
                     val text = clickedNode.text?.toString() ?: ""
                     
-                    Log.d(TAG, "点击节点详情: 类名=$className, 描述=$contentDesc, 文本=$text")
+                    Log.i(TAG, "点击节点详情: 类名=$className, 描述=$contentDesc, 文本=$text")
                     
                     // 判断是否是发送按钮
                     val isSendButton = className.contains("Button") || 
@@ -71,7 +71,7 @@ class QQAccessibilityService : AccessibilityService() {
                                       text.contains("发送", ignoreCase = true)
                     
                     if (isSendButton) {
-                        Log.d(TAG, "识别为可能的发送按钮，尝试获取输入内容")
+                        Log.i(TAG, "识别为可能的发送按钮，尝试获取输入内容")
                         
                         // 快速获取输入框的文本
                         val rootNode = rootInActiveWindow
@@ -79,13 +79,13 @@ class QQAccessibilityService : AccessibilityService() {
                         if (editText != null) {
                             val messageText = editText.text?.toString() ?: ""
                             if (messageText.isNotEmpty()) {
-                                Log.d(TAG, "捕获到要发送的消息: $messageText")
+                                Log.i(TAG, "捕获到要发送的消息: $messageText")
                                 
                                 // 立即清空输入框，阻止文字消息发送
                                 val bundle = android.os.Bundle()
                                 bundle.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "")
                                 val cleared = editText.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, bundle)
-                                Log.d(TAG, "清空输入框结果: $cleared")
+                                Log.i(TAG, "清空输入框结果: $cleared")
                                 
                                 // 延迟一下再处理，确保输入框已清空
                                 Handler(Looper.getMainLooper()).postDelayed({
@@ -108,7 +108,7 @@ class QQAccessibilityService : AccessibilityService() {
                     val currentText = node.text?.toString() ?: ""
                     if (currentText.isNotEmpty()) {
                         lastInputText = currentText
-                        Log.d(TAG, "记录输入文本: '$currentText'")
+                        Log.i(TAG, "记录输入文本: '$currentText'")
                     }
                     node.recycle()
                 }
@@ -118,26 +118,26 @@ class QQAccessibilityService : AccessibilityService() {
 
     private fun processQQMessage() {
         try {
-            Log.d(TAG, "开始处理QQ消息")
+            Log.i(TAG, "开始处理QQ消息")
             val rootNode = rootInActiveWindow ?: run {
-                Log.d(TAG, "无法获取根节点")
+                Log.i(TAG, "无法获取根节点")
                 return
             }
             
             // 查找输入框和发送按钮
             val messageText = findMessageText(rootNode)
-            Log.d(TAG, "找到的消息文本: $messageText")
+            Log.i(TAG, "找到的消息文本: $messageText")
             
             if (!messageText.isNullOrEmpty()) {
                 // 防止极短时间内重复处理(500ms内的重复点击)
                 val currentTime = System.currentTimeMillis()
                 if (messageText == lastProcessedText && 
                     currentTime - lastProcessedTime < 500) {
-                    Log.d(TAG, "重复消息（500ms内），忽略")
+                    Log.i(TAG, "重复消息（500ms内），忽略")
                     return
                 }
 
-                Log.d(TAG, "准备处理消息: $messageText")
+                Log.i(TAG, "准备处理消息: $messageText")
                 lastProcessedText = messageText
                 lastProcessedTime = currentTime
                 
@@ -154,17 +154,17 @@ class QQAccessibilityService : AccessibilityService() {
     
     private fun processMessageDirectly(messageText: String) {
         try {
-            Log.d(TAG, "直接处理消息: $messageText")
+            Log.i(TAG, "直接处理消息: $messageText")
             
             // 防止极短时间内重复处理
             val currentTime = System.currentTimeMillis()
             if (messageText == lastProcessedText && 
                 currentTime - lastProcessedTime < 1000) {
-                Log.d(TAG, "重复消息（1秒内），忽略")
+                Log.i(TAG, "重复消息（1秒内），忽略")
                 return
             }
 
-            Log.d(TAG, "开始处理消息: $messageText")
+            Log.i(TAG, "开始处理消息: $messageText")
             lastProcessedText = messageText
             lastProcessedTime = currentTime
             
