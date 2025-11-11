@@ -49,10 +49,60 @@ class QQAccessibilityService : AccessibilityService() {
             return
         }
 
-        // 监听文本变化和窗口变化
+        // 监听点击事件和文本变化
         when (event.eventType) {
+            AccessibilityEvent.TYPE_VIEW_CLICKED -> {
+                // 检测到点击事件，查看是否点击了发送按钮
+                Log.d(TAG, "检测到点击: 类名=${event.className}, 内容描述=${event.contentDescription}")
+                
+                val clickedNode = event.source
+                if (clickedNode != null) {
+                    // 检查是否是发送按钮（Button, ImageButton, ImageView等）
+                    val className = clickedNode.className?.toString() ?: ""
+                    val contentDesc = clickedNode.contentDescription?.toString() ?: ""
+                    val text = clickedNode.text?.toString() ?: ""
+                    
+                    Log.d(TAG, "点击节点详情: 类名=$className, 描述=$contentDesc, 文本=$text")
+                    
+                    // 判断是否是发送按钮
+                    val isSendButton = className.contains("Button") || 
+                                      className.contains("ImageView") ||
+                                      contentDesc.contains("发送", ignoreCase = true) ||
+                                      text.contains("发送", ignoreCase = true)
+                    
+                    if (isSendButton) {
+                        Log.d(TAG, "识别为可能的发送按钮，尝试获取输入内容")
+                        
+                        // 快速获取输入框的文本
+                        val rootNode = rootInActiveWindow
+                        val editText = findEditText(rootNode)
+                        if (editText != null) {
+                            val messageText = editText.text?.toString() ?: ""
+                            if (messageText.isNotEmpty()) {
+                                Log.d(TAG, "捕获到要发送的消息: $messageText")
+                                
+                                // 立即清空输入框，阻止文字消息发送
+                                val bundle = android.os.Bundle()
+                                bundle.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "")
+                                val cleared = editText.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, bundle)
+                                Log.d(TAG, "清空输入框结果: $cleared")
+                                
+                                // 延迟一下再处理，确保输入框已清空
+                                Handler(Looper.getMainLooper()).postDelayed({
+                                    processAndSendMessage(messageText)
+                                }, 200)
+                            }
+                            editText.recycle()
+                        }
+                        rootNode?.recycle()
+                    }
+                    
+                    clickedNode.recycle()
+                }
+            }
+            
             AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> {
-                // 记录输入框的文本
+                // 继续记录输入文本，用于备份
                 val node = event.source
                 if (node != null && node.className?.contains("EditText") == true) {
                     val currentText = node.text?.toString() ?: ""
@@ -61,31 +111,6 @@ class QQAccessibilityService : AccessibilityService() {
                         Log.d(TAG, "记录输入文本: '$currentText'")
                     }
                     node.recycle()
-                }
-            }
-            
-            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
-                // 检查是否输入框被清空了（可能是发送了）
-                if (lastInputText.isNotEmpty()) {
-                    // 查找输入框
-                    val rootNode = rootInActiveWindow
-                    val editText = findEditText(rootNode)
-                    if (editText != null) {
-                        val currentText = editText.text?.toString() ?: ""
-                        if (currentText.isEmpty()) {
-                            // 输入框被清空了，说明刚发送了消息
-                            Log.d(TAG, "检测到发送消息: $lastInputText")
-                            val messageToProcess = lastInputText
-                            lastInputText = ""
-                            
-                            // 处理并发送图片
-                            Handler(Looper.getMainLooper()).postDelayed({
-                                processAndSendMessage(messageToProcess)
-                            }, 100)
-                        }
-                        editText.recycle()
-                    }
-                    rootNode?.recycle()
                 }
             }
         }
