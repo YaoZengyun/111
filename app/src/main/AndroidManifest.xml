@@ -28,6 +28,13 @@
             </intent-filter>
         </activity>
 
+        <!-- 区域框选Activity -->
+        <activity
+            android:name=".AreaSelectorActivity"
+            android:exported="false"
+            android:label="框选文字区域"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
+
         <!-- 无障碍服务 -->
         <service
             android:name=".QQAccessibilityService"

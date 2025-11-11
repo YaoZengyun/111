@@ -186,6 +186,14 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:text="@string/select_template_image" />
+
+            <Button
+                android:id="@+id/btnSelectArea"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="📐 框选文字区域"
+                android:backgroundTint="#FF6B35" />
         </LinearLayout>
 
         <!-- 文字位置设置 -->

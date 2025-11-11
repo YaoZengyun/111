@@ -26,6 +26,10 @@ import java.io.FileOutputStream
 
 class MainActivity : AppCompatActivity() {
 
+    companion object {
+        private const val REQUEST_CODE_AREA_SELECT = 1001
+    }
+
     private lateinit var switchEnable: SwitchMaterial
     private lateinit var switchAutoSend: SwitchMaterial
     private lateinit var tvServiceStatus: TextView
@@ -34,6 +38,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvTemplateStatus: TextView
     private lateinit var ivTemplatePreview: ImageView
     private lateinit var btnSelectTemplate: Button
+    private lateinit var btnSelectArea: Button
     private lateinit var btnOpenAccessibilitySettings: Button
     private lateinit var btnSaveSettings: Button
     private lateinit var btnSelectColor: Button
@@ -87,6 +92,15 @@ class MainActivity : AppCompatActivity() {
         checkAndPromptAccessibility()
     }
 
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_CODE_AREA_SELECT && resultCode == RESULT_OK) {
+            // 重新加载设置以更新坐标值
+            loadSettings()
+            Toast.makeText(this, "文字区域已更新", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun initViews() {
         switchEnable = findViewById(R.id.switchEnable)
         switchAutoSend = findViewById(R.id.switchAutoSend)
@@ -96,6 +110,7 @@ class MainActivity : AppCompatActivity() {
         tvTemplateStatus = findViewById(R.id.tvTemplateStatus)
         ivTemplatePreview = findViewById(R.id.ivTemplatePreview)
         btnSelectTemplate = findViewById(R.id.btnSelectTemplate)
+        btnSelectArea = findViewById(R.id.btnSelectArea)
         btnOpenAccessibilitySettings = findViewById(R.id.btnOpenAccessibilitySettings)
         btnSaveSettings = findViewById(R.id.btnSaveSettings)
         btnSelectColor = findViewById(R.id.btnSelectColor)
@@ -140,6 +155,17 @@ class MainActivity : AppCompatActivity() {
         // 选择模板图片
         btnSelectTemplate.setOnClickListener {
             imagePickerLauncher.launch("image/*")
+        }
+
+        // 框选文字区域
+        btnSelectArea.setOnClickListener {
+            val templateFile = File(filesDir, "template.png")
+            if (!templateFile.exists()) {
+                Toast.makeText(this, "请先选择底图", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val intent = Intent(this, AreaSelectorActivity::class.java)
+            startActivityForResult(intent, REQUEST_CODE_AREA_SELECT)
         }
 
         // SeekBar监听
