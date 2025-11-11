@@ -11,6 +11,7 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import android.text.StaticLayout
 import android.text.TextPaint
+import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Toast
@@ -21,26 +22,36 @@ class QQAccessibilityService : AccessibilityService() {
 
     private var lastProcessedText: String? = null
     private var lastProcessedTime: Long = 0
+    
+    companion object {
+        private const val TAG = "QQAccessibilityService"
+    }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
+        
+        Log.d(TAG, "收到事件: ${event.eventType}, 包名: ${event.packageName}, 类名: ${event.className}")
 
         // 检查是否启用
         val prefs = getSharedPreferences("settings", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("enabled", false)) {
+            Log.d(TAG, "服务未启用，忽略事件")
             return
         }
 
         // 检查模板图片是否存在
         val templateFile = File(filesDir, "template.png")
         if (!templateFile.exists()) {
+            Log.d(TAG, "模板图片不存在")
             return
         }
 
-        // 监听窗口内容变化
+        // 监听窗口内容变化和点击事件
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
-            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> {
+            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED,
+            AccessibilityEvent.TYPE_VIEW_CLICKED -> {
+                Log.d(TAG, "触发处理逻辑")
                 processQQMessage()
             }
         }
@@ -48,31 +59,41 @@ class QQAccessibilityService : AccessibilityService() {
 
     private fun processQQMessage() {
         try {
-            val rootNode = rootInActiveWindow ?: return
+            Log.d(TAG, "开始处理QQ消息")
+            val rootNode = rootInActiveWindow ?: run {
+                Log.d(TAG, "无法获取根节点")
+                return
+            }
             
             // 查找输入框和发送按钮
             val messageText = findMessageText(rootNode)
+            Log.d(TAG, "找到的消息文本: $messageText")
             
             if (!messageText.isNullOrEmpty()) {
                 // 防止重复处理同一消息
                 val currentTime = System.currentTimeMillis()
                 if (messageText == lastProcessedText && 
                     currentTime - lastProcessedTime < 3000) {
+                    Log.d(TAG, "重复消息，忽略")
                     return
                 }
 
                 // 查找发送按钮点击事件
                 if (findSendButton(rootNode)) {
+                    Log.d(TAG, "找到发送按钮，准备处理消息: $messageText")
                     lastProcessedText = messageText
                     lastProcessedTime = currentTime
                     
                     // 处理消息
                     processAndSendMessage(messageText)
+                } else {
+                    Log.d(TAG, "未找到发送按钮")
                 }
             }
             
             rootNode.recycle()
         } catch (e: Exception) {
+            Log.e(TAG, "处理消息时出错", e)
             e.printStackTrace()
         }
     }
