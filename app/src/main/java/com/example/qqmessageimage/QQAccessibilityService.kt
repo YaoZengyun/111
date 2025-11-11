@@ -47,6 +47,17 @@ class QQAccessibilityService : AccessibilityService() {
         }
         
         Log.i(TAG, ">>> QQ事件: ${event.eventType}, 类名: ${event.className}")
+        
+        // 如果是窗口状态改变，打印整个View树结构
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            val rootNode = rootInActiveWindow
+            if (rootNode != null) {
+                Log.i(TAG, "===== QQ窗口View树结构 =====")
+                printNodeTree(rootNode, 0)
+                Log.i(TAG, "===== View树结构结束 =====")
+                rootNode.recycle()
+            }
+        }
 
         // 检查是否启用
         val prefs = getSharedPreferences("settings", Context.MODE_PRIVATE)
@@ -574,6 +585,40 @@ class QQAccessibilityService : AccessibilityService() {
     private fun showToast(message: String) {
         android.os.Handler(mainLooper).post {
             Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /**
+     * 递归打印View树结构，用于调试
+     */
+    private fun printNodeTree(node: AccessibilityNodeInfo?, depth: Int) {
+        node ?: return
+        
+        val indent = "  ".repeat(depth)
+        val className = node.className ?: "null"
+        val viewId = node.viewIdResourceName ?: "无ID"
+        val text = node.text?.toString() ?: ""
+        val contentDesc = node.contentDescription?.toString() ?: ""
+        val isClickable = node.isClickable
+        val isEditable = node.isEditable
+        
+        val info = StringBuilder()
+        info.append("$indent[$className]")
+        if (viewId != "无ID") info.append(" id=$viewId")
+        if (text.isNotEmpty()) info.append(" text='$text'")
+        if (contentDesc.isNotEmpty()) info.append(" desc='$contentDesc'")
+        if (isClickable) info.append(" [可点击]")
+        if (isEditable) info.append(" [可编辑]")
+        
+        Log.i(TAG, info.toString())
+        
+        // 递归打印子节点
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i)
+            if (child != null) {
+                printNodeTree(child, depth + 1)
+                child.recycle()
+            }
         }
     }
 
