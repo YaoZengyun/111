@@ -580,9 +580,4 @@ class QQAccessibilityService : AccessibilityService() {
     override fun onInterrupt() {
         // 服务中断时调用
     }
-
-    override fun onServiceConnected() {
-        super.onServiceConnected()
-        showToast("QQ消息监听服务已启动")
-    }
 }
