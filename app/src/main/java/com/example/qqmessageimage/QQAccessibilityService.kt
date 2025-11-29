@@ -282,79 +282,131 @@ class QQAccessibilityService : AccessibilityService() {
 
     /**
      * 开始自动选择并发送流程
-     * 方案: 点击+ → 点击相册 → 选择最新图片 → 发送
+     * 方案: 复制图片到剪贴板 → 粘贴 → 发送
      */
     private fun startAutoSelectAndSend() {
         try {
-            Log.i(TAG, "开始自动发送流程")
+            Log.i(TAG, "开始自动发送流程 (剪贴板方案)")
             val rootNode = rootInActiveWindow
             if (rootNode == null) {
                 showToast("请手动发送图片")
                 return
             }
-        
-        // 1. 点击"+"按钮
-        val plusClicked = findAndClickNode(rootNode, listOf("更多功能", "更多", "+", "plus"))
-        
-        if (plusClicked) {
-            Log.i(TAG, "✓ 已点击+按钮")
+
+            // 1. 复制图片到剪贴板
+            // 注意：这里需要获取刚才保存的图片的URI
+            // 由于之前的逻辑中 savedImageUriString 是局部变量，我们需要调整一下
+            // 暂时先尝试查找最新的图片URI，或者在保存时记录下来
+            // 为了简化，我们假设已经有了 Uri，这里先演示剪贴板逻辑
+            // 实际应用中，我们需要将 savedImageUriString 提升为类成员变量或者传递过来
             
-            // 2. 等待菜单打开,点击"相册"
-            Handler(Looper.getMainLooper()).postDelayed({
-                val root2 = rootInActiveWindow
-                if (root2 != null) {
-                    val albumClicked = findAndClickNode(root2, listOf("相册", "图片", "照片"))
+            // 修正：我们需要在保存图片时记录 Uri，这里先通过 MediaStore 查询最新的图片
+            val imageUri = getLastSavedImageUri()
+            if (imageUri != null) {
+                copyImageToClipboard(imageUri)
+                Log.i(TAG, "✓ 图片已复制到剪贴板")
+                showToast("图片已复制，准备粘贴...")
+
+                // 2. 查找输入框并粘贴
+                // QQ输入框通常是 EditText，且此时应该是空的（因为我们之前清空了）
+                // 或者我们可以直接查找 "发送" 按钮旁边的输入框
+                val inputNode = findInputNode(rootNode)
+                if (inputNode != null) {
+                    // 粘贴
+                    val args = android.os.Bundle()
+                    inputNode.performAction(AccessibilityNodeInfo.ACTION_PASTE)
+                    Log.i(TAG, "✓ 已执行粘贴动作")
                     
-                    if (albumClicked) {
-                        Log.i(TAG, "✓ 已点击相册")
-                        
-                        // 3. 等待相册打开,点击第一张图片
-                        Handler(Looper.getMainLooper()).postDelayed({
-                            selectAndSendFirstImage()
-                        }, 1000)
-                    }
-                    root2.recycle()
+                    // 3. 等待图片加载，点击发送
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        val root2 = rootInActiveWindow
+                        if (root2 != null) {
+                            val sendClicked = findAndClickNode(root2, listOf("发送", "send"))
+                            if (sendClicked) {
+                                Log.i(TAG, "✓ 已点击发送")
+                                showToast("✓ 图片已自动发送")
+                            } else {
+                                // 有时候粘贴后需要再次点击发送
+                                showToast("请点击发送")
+                            }
+                            root2.recycle()
+                        }
+                    }, 800)
+                } else {
+                    showToast("未找到输入框，请手动粘贴")
                 }
-            }, 500)
-        } else {
-            showToast("请手动打开相册")
+            } else {
+                showToast("获取图片失败")
+            }
+            
+            rootNode.recycle()
+        } catch (e: Exception) {
+            Log.e(TAG, "自动发送流程失败", e)
         }
-        
-        rootNode.recycle()
     }
 
     /**
-     * 选择第一张图片并发送
+     * 获取最新保存的图片URI
      */
-    private fun selectAndSendFirstImage() {
-        val rootNode = rootInActiveWindow
-        if (rootNode == null) {
-            showToast("请手动选择图片")
-            return
+    private fun getLastSavedImageUri(): Uri? {
+        val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+        } else {
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI
         }
-        
-        // 点击第一张图片(最新的)
-        val imageClicked = findAndClickFirstClickable(rootNode)
-        
-        if (imageClicked) {
-            Log.i(TAG, "✓ 已选择图片")
-            
-            // 等待预览,点击发送
-            Handler(Looper.getMainLooper()).postDelayed({
-                val root2 = rootInActiveWindow
-                if (root2 != null) {
-                    val sendClicked = findAndClickNode(root2, listOf("发送", "确定", "完成"))
-                    
-                    if (sendClicked) {
-                        Log.i(TAG, "✓ 已发送图片")
-                        showToast("✓ 图片已自动发送")
-                    }
-                    root2.recycle()
+
+        val projection = arrayOf(MediaStore.Images.Media._ID)
+        val sortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC"
+
+        try {
+            contentResolver.query(
+                collection,
+                projection,
+                null,
+                null,
+                sortOrder
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
+                    val id = cursor.getLong(idColumn)
+                    return android.content.ContentUris.withAppendedId(collection, id)
                 }
-            }, 800)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "查询最新图片失败", e)
+        }
+        return null
+    }
+
+    /**
+     * 复制图片到剪贴板
+     */
+    private fun copyImageToClipboard(uri: Uri) {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        val clip = android.content.ClipData.newUri(contentResolver, "image", uri)
+        clipboard.setPrimaryClip(clip)
+    }
+
+    /**
+     * 查找输入框节点
+     */
+    private fun findInputNode(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+        node ?: return null
+        
+        if (node.className == "android.widget.EditText") {
+            return node
         }
         
-        rootNode.recycle()
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val result = findInputNode(child)
+            if (result != null) {
+                // child.recycle() // 不要回收返回的节点
+                return result
+            }
+            child.recycle()
+        }
+        return null
     }
 
     /**
