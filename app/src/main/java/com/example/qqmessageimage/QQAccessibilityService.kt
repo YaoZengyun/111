@@ -267,7 +267,8 @@ class QQAccessibilityService : AccessibilityService() {
             val autoSend = prefs.getBoolean("auto_send", false)
             if (autoSend) {
                 Handler(Looper.getMainLooper()).postDelayed({
-                    autoSendImage(outputFile)
+                    // 直接开始发送流程，不再重复保存
+                    startAutoSelectAndSend()
                 }, 300)
             } else {
                 showToast("✓ 图片已生成")
@@ -280,86 +281,17 @@ class QQAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * 自动发送图片
-     * 方案: 添加到相册 → 点击+ → 点击相册 → 选择最新图片 → 发送
-     */
-    private fun autoSendImage(imageFile: File) {
-        try {
-            Log.i(TAG, "开始自动发送")
-            
-            // 将图片添加到系统相册
-            val imageUri = addImageToGallery(imageFile)
-            if (imageUri != null) {
-                Log.i(TAG, "✓ 图片已添加到相册")
-                showToast("✓ 图片已保存到相册")
-                
-                // 延迟后开始自动选择发送流程
-                Handler(Looper.getMainLooper()).postDelayed({
-                    startAutoSelectAndSend()
-                }, 500)
-            } else {
-                showToast("保存到相册失败")
-            }
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "自动发送失败", e)
-            showToast("发送失败: ${e.message}")
-        }
-    }
-
-    /**
-     * 添加图片到系统相册
-     */
-    private fun addImageToGallery(imageFile: File): Uri? {
-        try {
-            val values = ContentValues().apply {
-                put(MediaStore.Images.Media.DISPLAY_NAME, imageFile.name)
-                put(MediaStore.Images.Media.MIME_TYPE, "image/png")
-                put(MediaStore.Images.Media.DATE_ADDED, System.currentTimeMillis() / 1000)
-                
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/QQMessages")
-                    put(MediaStore.Images.Media.IS_PENDING, 1)
-                }
-            }
-            
-            val uri = contentResolver.insert(
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                values
-            )
-            
-            if (uri != null) {
-                contentResolver.openOutputStream(uri)?.use { output ->
-                    imageFile.inputStream().use { input ->
-                        input.copyTo(output)
-                    }
-                }
-                
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    values.clear()
-                    values.put(MediaStore.Images.Media.IS_PENDING, 0)
-                    contentResolver.update(uri, values, null, null)
-                }
-                
-                return uri
-            }
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "添加到相册失败", e)
-        }
-        
-        return null
-    }
-
-    /**
      * 开始自动选择并发送流程
+     * 方案: 点击+ → 点击相册 → 选择最新图片 → 发送
      */
     private fun startAutoSelectAndSend() {
-        val rootNode = rootInActiveWindow
-        if (rootNode == null) {
-            showToast("请手动发送图片")
-            return
-        }
+        try {
+            Log.i(TAG, "开始自动发送流程")
+            val rootNode = rootInActiveWindow
+            if (rootNode == null) {
+                showToast("请手动发送图片")
+                return
+            }
         
         // 1. 点击"+"按钮
         val plusClicked = findAndClickNode(rootNode, listOf("更多功能", "更多", "+", "plus"))
