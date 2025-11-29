@@ -189,13 +189,73 @@ class QQAccessibilityService : AccessibilityService() {
                 overlayBitmap.recycle()
             }
 
-            // 保存图片
+            // 保存图片到公共图库（MediaStore），并尝试复制到常见的QQ图片目录，
+            // 这样QQ的图片选择器更容易识别到刚生成的图片
             val timestamp = System.currentTimeMillis()
             val fileName = "QQMsg_$timestamp.png"
-            val outputFile = File(getExternalFilesDir(null), fileName)
-            
-            FileOutputStream(outputFile).use { out ->
-                mutableBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+
+            var savedImageUriString: String? = null
+            try {
+                // 优先使用 MediaStore（适用于 Android 10+）
+                val resolver = applicationContext.contentResolver
+                val values = ContentValues().apply {
+                    put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
+                    put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                    put(MediaStore.Images.Media.RELATIVE_PATH, android.os.Environment.DIRECTORY_PICTURES + "/QQMessageImageApp")
+                    put(MediaStore.Images.Media.IS_PENDING, 1)
+                }
+
+                val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                if (uri != null) {
+                    resolver.openOutputStream(uri)?.use { out ->
+                        mutableBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                    }
+                    values.clear()
+                    values.put(MediaStore.Images.Media.IS_PENDING, 0)
+                    resolver.update(uri, values, null, null)
+                    savedImageUriString = uri.toString()
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "保存到MediaStore失败，回退到应用目录: ${e.message}")
+            }
+
+            // 兼容性尝试：将图片写入常见的QQ图片目录（仅在允许的设备上生效）
+            try {
+                val externalRoot = android.os.Environment.getExternalStorageDirectory()
+                val qqCandidates = arrayOf(
+                    File(externalRoot, "Tencent/QQ_Images"),
+                    File(externalRoot, "Tencent/MobileQQ/photo"),
+                    File(externalRoot, "Pictures/QQMessageImageApp")
+                )
+
+                val scanned = mutableListOf<String>()
+                for (dir in qqCandidates) {
+                    try {
+                        if (!dir.exists()) dir.mkdirs()
+                        val dest = File(dir, fileName)
+                        FileOutputStream(dest).use { out ->
+                            mutableBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                        }
+                        scanned.add(dest.absolutePath)
+                    } catch (_: Exception) {
+                        // 忽略单个目录写入失败，继续尝试其他目录
+                    }
+                }
+
+                if (scanned.isNotEmpty()) {
+                    try {
+                        android.media.MediaScannerConnection.scanFile(
+                            applicationContext,
+                            scanned.toTypedArray(),
+                            Array(scanned.size) { "image/png" },
+                            null
+                        )
+                    } catch (_: Exception) {
+                        // 忽略
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "复制到QQ目录失败: ${e.message}")
             }
             
             Log.i(TAG, "✓ 图片已保存: ${outputFile.absolutePath}")
